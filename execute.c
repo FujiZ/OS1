@@ -209,7 +209,7 @@ void ctrl_C(){
     now->cmd[strlen(now->cmd) + 1] = '\0';
     printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
     
-	//发送SIGSTOP信号给正在前台运作的工作，将其停止
+	//发送SIGINT信号给正在前台运作的工作，将其杀死
     kill(fgPid, SIGINT);
     fgPid = 0;
 }
