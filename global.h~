@@ -9,7 +9,7 @@ extern "C" {
     
     #define STOPPED "stopped"
     #define RUNNING "running"
-    #define KILLED  "killed"
+	#define KILLED	"killed"
     #define DONE    "done"
 
     #include <stdio.h>
