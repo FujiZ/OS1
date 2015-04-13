@@ -3,9 +3,9 @@
 %}
 
 %%
-"<"	{return "<";}
-">"	{return ">";}
-"&"	{return "&";}
-"|" {return "|";}
+"<"	{return '<';}
+">"	{return '>';}
+"&"	{return '&';}
+"|" {return '|';}
 [^<>&\n \t\|]+ {return STRING;}
 %%
