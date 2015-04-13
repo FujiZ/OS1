@@ -36,11 +36,11 @@ extern "C" {
     } Job;
     
     char inputBuff[100];  //存放输入的命令
-    
+    int inPipe,outPipe;   //存放pipe的输入输出指针
     void init();
     void addHistory(char *history);
-    void execute();
-
+    void execute(int i,int j);
+	void execute_cmplx();
 #ifdef	__cplusplus
 }
 #endif
