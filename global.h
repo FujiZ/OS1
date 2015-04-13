@@ -25,7 +25,7 @@ extern "C" {
     typedef struct History {
         int start;                    //首位置
         int end;                      //末位置
-        char cmds[HISTORY_LEN][100];  //历史命令
+        char cmds[HISTORY_LEN][200];  //历史命令
     } History;
 
     typedef struct Job {
@@ -35,7 +35,7 @@ extern "C" {
         struct Job *next; //下一节点指针
     } Job;
     
-    char inputBuff[100];  //存放输入的命令
+    char inputBuff[200];  //存放输入的命令
     int inPipe,outPipe;   //存放pipe的输入输出指针
     void init();
     void addHistory(char *history);

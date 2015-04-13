@@ -636,9 +636,11 @@ void execSimpleCmd(SimpleCmd *cmd){
     //释放结构体空间
     for(i = 0; cmd->args[i] != NULL; i++){
         free(cmd->args[i]);
-        free(cmd->input);
-        free(cmd->output);
     }
+	if(cmd->input!=NULL)
+		free(cmd->input);
+	if(cmd->output!=NULL)
+    	free(cmd->output);
 }
 
 /*******************************************************
