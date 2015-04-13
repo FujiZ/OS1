@@ -209,7 +209,7 @@ void ctrl_C(){
     printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
     
 	//发送SIGINT信号给正在前台运作的工作，将其杀死
-    kill(fgPid, SIGINT);
+    kill(fgPid, SIGKILL);
     fgPid = 0;
 }
 
@@ -507,6 +507,15 @@ void execOuterCmd(SimpleCmd *cmd){
         }
         
         if(pid == 0){ //子进程
+		//在这里添加pipe(需要判断是否为0或1)
+			if(inPipe!=0){
+				dup2(inPipe,0);
+				close(inPipe);
+			}
+			if(outPipe!=1){
+				dup2(outPipe,1);
+				close(outPipe);
+			}
             if(cmd->input != NULL){ //存在输入重定向
                 if((pipeIn = open(cmd->input, O_RDONLY, S_IRUSR|S_IWUSR)) == -1){
                     printf("不能打开文件 %s！\n", cmd->input);
@@ -635,7 +644,39 @@ void execSimpleCmd(SimpleCmd *cmd){
 /*******************************************************
                      命令执行接口
 ********************************************************/
-void execute(){
-    SimpleCmd *cmd = handleSimpleCmdStr(0, strlen(inputBuff));
+void execute(int i,int j){
+    SimpleCmd *cmd = handleSimpleCmdStr(i, j);//这里需要通过execute_cmplx来分解命令然后传递到这执行
     execSimpleCmd(cmd);
+}
+
+void execute_cmplx(){
+	int i=0,j=0;
+	int flag=0;//flag用来判断是否关闭上一个管道的读指针
+	int pipe_fd[2]={0,1};
+	//初始化管道指针初值
+	inPipe=0;
+	outPipe=1;
+	for(j=0;inputBuff[j]!='\0';++j){
+		if(inputBuff[j]=='|'){//找到管道标志
+			if(pipe(pipe_fd)<0){//创建管道
+				perror("pipe failed");
+				exit(errno);
+			}
+			outPipe=pipe_fd[1];//将这条指令的写指针改为pipe的写指针
+			execute(i,j-1);//执行这条命令
+			if(flag==1){//该指令前存在管道指令
+				close(inPipe);//关闭上一个管道的读指针?关于顺序有疑问
+			}
+			else{
+				flag=1;//否则置位
+			}
+			close(outPipe);//关闭父进程的写指针
+			inPipe=pipe_fd[0];//将管道读指针改成下一条指令的读指针
+			i=j+1;//移动字符串头指针
+		}
+	}
+	outPipe=1;//重置写指针
+	execute(i,strlen(inputBuff));
+	if(flag==1)
+		close(inPipe);
 }

@@ -650,7 +650,7 @@ void execute(int i,int j){
 }
 
 void execute_cmplx(){
-	int i=j=0;
+	int i=0,j=0;
 	int flag=0;//flag用来判断是否关闭上一个管道的读指针
 	int pipe_fd[2]={0,1};
 	//初始化管道指针初值
