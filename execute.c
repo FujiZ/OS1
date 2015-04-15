@@ -639,8 +639,8 @@ void execSimpleCmd(SimpleCmd *cmd){
 		//此处插入对通配符的支持，通过扫描目标目录下的文件名来判断是否符合要求
 		if(strcmp(cmd->args[0],"echo")!=0){//排除诸如echo等不用通配符的命令(可以按需求添加)
 			//先判断参数1到n中有没有通配符
-			for(int i=1;cmd->args[i]!=NULL;++i){
-				if(contain_wildcard(cmd->args[i]){//如果扫描到有通配符的
+			for(i=1;cmd->args[i]!=NULL;++i){
+				if(contain_wildcard(cmd->args[i])){//如果扫描到有通配符的
 					argbuff=cmd->args[i];//将arg暂时保存起来
 					cmd->args[i]=NULL;//将原CMD参数置为空
 					//寻找该文件的根目录
@@ -743,7 +743,11 @@ char* find_dir(char* str){
 		}
 	}
 	//若未找到，则返回本地目录
-	return "./";
+	cmddir=(char*)malloc(3*sizeof(char));
+	cmddir[0]='.';
+	cmddir[1]='/';
+	cmddir[2]='\0';
+	return cmddir;
 }
 
 char* find_file(char* str){
@@ -753,7 +757,7 @@ char* find_file(char* str){
 	for(i=strlen(str);i>=0;--i){
 		if(str[i]=='/'){
 			cmdfile=(char*)malloc((strlen(str)-i)*sizeof(char));
-			strcpy(cmdfile,str+i);
+			strcpy(cmdfile,str+i+1);
 			return cmdfile;
 		}
 	}
