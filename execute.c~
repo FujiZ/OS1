@@ -630,6 +630,9 @@ void execSimpleCmd(SimpleCmd *cmd){
             printf("bg; 参数不合法，正确格式为：bg %%<int>\n");
         }
     } else{ //外部命令
+		//此处插入对通配符的支持，通过扫描目标目录下的文件名来判断是否符合要求
+		//先判断参数1到n中有没有通配符
+		//如果扫描到多个符合要求的
         execOuterCmd(cmd);
     }
     
@@ -665,7 +668,7 @@ void execute_cmplx(){
 				exit(errno);
 			}
 			outPipe=pipe_fd[1];//将这条指令的写指针改为pipe的写指针
-			execute(i,j-1);//执行这条命令
+			execute(i,j);//执行这条命令
 			if(flag==1){//该指令前存在管道指令
 				close(inPipe);//关闭上一个管道的读指针?关于顺序有疑问
 			}

@@ -630,6 +630,9 @@ void execSimpleCmd(SimpleCmd *cmd){
             printf("bg; 参数不合法，正确格式为：bg %%<int>\n");
         }
     } else{ //外部命令
+		//此处插入对通配符的支持，通过扫描目标目录下的文件名来判断是否符合要求
+		//先判断参数1到n中有没有通配符
+		//如果扫描到多个符合要求的
         execOuterCmd(cmd);
     }
     
@@ -641,6 +644,33 @@ void execSimpleCmd(SimpleCmd *cmd){
 		free(cmd->input);
 	if(cmd->output!=NULL)
     	free(cmd->output);
+}
+/*******************************************************
+                     通配符匹配函数
+********************************************************/
+char dp_match( const char *str1, const char *str2)
+{
+    int slen1 = strlen(str1);
+    int slen2 = strlen(str2);
+    char match[MAXSIZE][MAXSIZE];
+    memset(match, 0, MAXSIZE*MAXSIZE);
+    match[0][0] = 1;
+    int i, j, k, m;
+    for(i=1; i<=slen1; ++i)
+    {
+        for(j=1; j<=slen2; ++j)
+            if(match[i-1][j-1])
+                if(str1[i-1]==str2[j-1] || str2[j-1]=='?')
+                    match[i][j]=1; 
+                else if(str2[j-1]=='*')
+                    for(k=i-1; k<=slen1; ++k)
+                        match[k][j] = 1;
+        for(k=1; k<=slen2; ++k)
+            if(match[i][k])
+                break;
+        if(k>slen2) return 0;
+    }
+    return match[slen1][slen2];
 }
 
 /*******************************************************
@@ -665,7 +695,7 @@ void execute_cmplx(){
 				exit(errno);
 			}
 			outPipe=pipe_fd[1];//将这条指令的写指针改为pipe的写指针
-			execute(i,j-1);//执行这条命令
+			execute(i,j);//执行这条命令
 			if(flag==1){//该指令前存在管道指令
 				close(inPipe);//关闭上一个管道的读指针?关于顺序有疑问
 			}

@@ -7,6 +7,8 @@ extern "C" {
     
     #define HISTORY_LEN 10
     
+	#define MAXSIZE 100
+	
     #define STOPPED "stopped"
     #define RUNNING "running"
     #define KILLED  "killed"
@@ -41,6 +43,7 @@ extern "C" {
     void addHistory(char *history);
     void execute(int i,int j);
 	void execute_cmplx();
+	char dp_match( const char *str1, const char *str2);
 #ifdef	__cplusplus
 }
 #endif
