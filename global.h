@@ -43,7 +43,10 @@ extern "C" {
     void addHistory(char *history);
     void execute(int i,int j);
 	void execute_cmplx();
-	char dp_match( const char *str1, const char *str2);
+	char dp_match( const char *str1, const char *str2);//通配符处理
+	int contain_wildcard(char* str);
+	char* find_dir(char* str);
+	char* find_file(char* str);
 #ifdef	__cplusplus
 }
 #endif

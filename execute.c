@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 #include <sys/termios.h>
+#include <dirent.h>
 
 #include "global.h"
 #define DEBUG
@@ -576,7 +577,12 @@ void execOuterCmd(SimpleCmd *cmd){
 /*执行命令*/
 void execSimpleCmd(SimpleCmd *cmd){
     int i, pid;
+	int flag=0;//用来判断是否匹配了文件
     char *temp;
+	char *argbuff;
+	char *cmddir,*cmdfile;
+	DIR *dir_source=NULL;
+	struct dirent * dir_ptr;
     Job *now = NULL;
     
     if(strcmp(cmd->args[0], "exit") == 0) { //exit命令
@@ -631,9 +637,52 @@ void execSimpleCmd(SimpleCmd *cmd){
         }
     } else{ //外部命令
 		//此处插入对通配符的支持，通过扫描目标目录下的文件名来判断是否符合要求
-		//先判断参数1到n中有没有通配符
-		//如果扫描到多个符合要求的
-        execOuterCmd(cmd);
+		if(strcmp(cmd->args[0],"echo")!=0){//排除诸如echo等不用通配符的命令(可以按需求添加)
+			//先判断参数1到n中有没有通配符
+			for(int i=1;cmd->args[i]!=NULL;++i){
+				if(contain_wildcard(cmd->args[i]){//如果扫描到有通配符的
+					argbuff=cmd->args[i];//将arg暂时保存起来
+					cmd->args[i]=NULL;//将原CMD参数置为空
+					//寻找该文件的根目录
+					cmddir=find_dir(argbuff);
+					cmdfile=find_file(argbuff);
+					if((dir_source=opendir(cmddir))!=NULL){//若能打开文件目录
+						while((dir_ptr=readdir(dir_source))!=NULL){//遍历目录下的文件
+							if(dp_match(dir_ptr->d_name,cmdfile)){//如果能够匹配
+								flag=1;//将flag置位
+								if(cmd->args[i]!=NULL)//将上一个参数free掉
+									free(cmd->args[i]);
+								cmd->args[i]=(char*)malloc((strlen(cmddir)+strlen(dir_ptr->d_name)+1)*sizeof(char));
+								strcpy(cmd->args[i],cmddir);//将文件路径复制到cmd->args
+								strcat(cmd->args[i],dir_ptr->d_name);
+								execOuterCmd(cmd);//执行命令
+							}
+						}
+						if(flag==1){//若有匹配的文件,则退出循环
+							free(cmddir);
+							free(cmdfile);
+							closedir(dir_source);
+							break;
+						}
+						else//若无匹配的文件
+							cmd->args[i]=argbuff;//将cmd->args[i]复位
+					}
+					else//若不能打开文件目录
+						cmd->args[i]=argbuff;//将cmd->args[i]复位
+					if(dir_source!=NULL)//若打开过文件地址
+						closedir(dir_source);
+					free(cmddir);
+					free(cmdfile);
+				}
+				//若没有扫描到则继续扫描
+			}
+			if(flag==0){//没有通配符匹配执行过
+				flag=1;
+				execOuterCmd(cmd);
+			}
+		}
+		else
+			execOuterCmd(cmd);
     }
     
     //释放结构体空间
@@ -646,9 +695,9 @@ void execSimpleCmd(SimpleCmd *cmd){
     	free(cmd->output);
 }
 /*******************************************************
-                     通配符匹配函数
+                     通配符处理函数
 ********************************************************/
-char dp_match( const char *str1, const char *str2)
+char dp_match( const char *str1, const char *str2)//第一个为文件名，第二个为通配符
 {
     int slen1 = strlen(str1);
     int slen2 = strlen(str2);
@@ -673,6 +722,46 @@ char dp_match( const char *str1, const char *str2)
     return match[slen1][slen2];
 }
 
+int contain_wildcard(char* str){
+	int i;
+	for(i=0;str[i]!='\0';++i){
+		if(str[i]=='*'||str[i]=='?')
+			return 1;
+	}
+	return 0;
+}
+
+char* find_dir(char* str){
+	int i=0;
+	char *cmddir=NULL;
+	//从后向前找到第一个'/'
+	for(i=strlen(str);i>=0;--i){
+		if(str[i]=='/'){
+			cmddir=(char*)malloc((i+2)*sizeof(char));
+			strncpy(cmddir,str,i+1);
+			return cmddir;
+		}
+	}
+	//若未找到，则返回本地目录
+	return "./";
+}
+
+char* find_file(char* str){
+	int i=0;
+	char *cmdfile=NULL;
+	//从后向前找到第一个'/'
+	for(i=strlen(str);i>=0;--i){
+		if(str[i]=='/'){
+			cmdfile=(char*)malloc((strlen(str)-i)*sizeof(char));
+			strcpy(cmdfile,str+i);
+			return cmdfile;
+		}
+	}
+	//若未找到，则返回本地目录
+	cmdfile=(char*)malloc((strlen(str)+1)*sizeof(char));
+	strcpy(cmdfile,str);
+	return cmdfile;
+}
 /*******************************************************
                      命令执行接口
 ********************************************************/
