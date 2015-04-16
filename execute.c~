@@ -11,6 +11,7 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 #include <sys/termios.h>
+#include <dirent.h>
 
 #include "global.h"
 #define DEBUG
@@ -186,6 +187,72 @@ void ctrl_Z(){
 
 /*组合键命令ctrl+c*/
 void ctrl_C(){
+   Job *now = NULL, *last = NULL;
+   if(fgPid == 0){ //前台没有作业则直接返回
+        return;
+    }
+        //
+    ingnore = 1;
+    
+	now = head;
+	while(now != NULL && now->pid != fgPid)
+		now = now->next;
+    
+    if(now == NULL){ //未找到前台作业，则根据fgPid添加前台作业
+        now = addJob(fgPid);
+    }
+    
+		    //修改前台作业的状态及相应的命令格式，并打印提示信息
+    strcpy(now->state, KILLED); 
+    now->cmd[strlen(now->cmd)] = '\0';
+    printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
+    
+	            //发送SIGTERM信号给正在前台运作的工作，将其终止
+    kill(fgPid, SIGTERM);
+				//将终止的进程的jobs信息删除.
+    if(now == head){
+        head = now->next;
+    }else{
+        last->next = now->next;
+    }
+    free(now);
+    fgPid = 0;
+}
+/*
+void ctrl_C(){
+    Job *now = NULL,*pre = NULL;
+    
+    if(fgPid == 0){ //前台没有作业则直接返回
+        return;
+    }
+    ingnore = 1;
+    now = head;
+    while(now != NULL && now->pid != fgPid)
+    {
+      pre = now;
+      now = now->next; 
+    }
+    if(now == NULL){ //未找到前台作业，则根据fgPid添加前台作业
+       now = addJob(fgPid);
+   }
+    
+    //修改前台作业的状态及相应的命令格式，并打印提示信息
+    strcpy(now->state, STOPPED); 
+    now->cmd[strlen(now->cmd)] = '&';
+    now->cmd[strlen(now->cmd) + 1] = '\0';
+    printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
+    
+    //发送SIGSTOP信号给正在前台运作的工作，将其停止
+    kill(fgPid, SIGKILL);
+    if(now == head)
+      head = head -> next;
+    else
+      pre->next = now->next;
+    fgPid = 0;
+}
+*/
+/*
+void ctrl_C(){
     Job *now = NULL;
     
 	//SIGCHLD信号产生自此函数
@@ -212,7 +279,7 @@ void ctrl_C(){
     kill(fgPid, SIGKILL);
     fgPid = 0;
 }
-
+*/
 /*fg命令*/
 void fg_exec(int pid){    
     Job *now = NULL; 
@@ -265,6 +332,7 @@ void bg_exec(int pid){
     }
     
     strcpy(now->state, RUNNING); //修改对象作业的状态
+	//signal(SIGINT, ctrl_C); //设置signal信号，为下一次按下组合键Ctrl+c做准备
     printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
     
     kill(now->pid, SIGCONT); //向对象作业发送SIGCONT信号，使其运行
@@ -558,9 +626,10 @@ void execOuterCmd(SimpleCmd *cmd){
                 fgPid = 0; //pid置0，为下一命令做准备
                 addJob(pid); //增加新的作业
                 kill(pid, SIGUSR1); //子进程发信号，表示作业已加入
-                
+            	
                 //等待子进程输出
                 signal(SIGUSR1, setGoon);
+				sleep(1);//test
                 while(goon == 0) ;
                 goon = 0;
             }else{ //非后台命令
@@ -576,7 +645,12 @@ void execOuterCmd(SimpleCmd *cmd){
 /*执行命令*/
 void execSimpleCmd(SimpleCmd *cmd){
     int i, pid;
+	int flag=0;//用来判断是否匹配了文件
     char *temp;
+	char *argbuff;
+	char *cmddir,*cmdfile;
+	DIR *dir_source=NULL;
+	struct dirent * dir_ptr;
     Job *now = NULL;
     
     if(strcmp(cmd->args[0], "exit") == 0) { //exit命令
@@ -631,9 +705,52 @@ void execSimpleCmd(SimpleCmd *cmd){
         }
     } else{ //外部命令
 		//此处插入对通配符的支持，通过扫描目标目录下的文件名来判断是否符合要求
-		//先判断参数1到n中有没有通配符
-		//如果扫描到多个符合要求的
-        execOuterCmd(cmd);
+		if(strcmp(cmd->args[0],"echo")!=0){//排除诸如echo等不用通配符的命令(可以按需求添加)
+			//先判断参数1到n中有没有通配符
+			for(i=1;cmd->args[i]!=NULL;++i){
+				if(contain_wildcard(cmd->args[i])){//如果扫描到有通配符的
+					argbuff=cmd->args[i];//将arg暂时保存起来
+					cmd->args[i]=NULL;//将原CMD参数置为空
+					//寻找该文件的根目录
+					cmddir=find_dir(argbuff);
+					cmdfile=find_file(argbuff);
+					if((dir_source=opendir(cmddir))!=NULL){//若能打开文件目录
+						while((dir_ptr=readdir(dir_source))!=NULL){//遍历目录下的文件
+							if(dp_match(dir_ptr->d_name,cmdfile)){//如果能够匹配
+								flag=1;//将flag置位
+								if(cmd->args[i]!=NULL)//将上一个参数free掉
+									free(cmd->args[i]);
+								cmd->args[i]=(char*)malloc((strlen(cmddir)+strlen(dir_ptr->d_name)+1)*sizeof(char));
+								strcpy(cmd->args[i],cmddir);//将文件路径复制到cmd->args
+								strcat(cmd->args[i],dir_ptr->d_name);
+								execOuterCmd(cmd);//执行命令
+							}
+						}
+						if(flag==1){//若有匹配的文件,则退出循环
+							free(cmddir);
+							free(cmdfile);
+							closedir(dir_source);
+							break;
+						}
+						else//若无匹配的文件
+							cmd->args[i]=argbuff;//将cmd->args[i]复位
+					}
+					else//若不能打开文件目录
+						cmd->args[i]=argbuff;//将cmd->args[i]复位
+					if(dir_source!=NULL)//若打开过文件地址
+						closedir(dir_source);
+					free(cmddir);
+					free(cmdfile);
+				}
+				//若没有扫描到则继续扫描
+			}
+			if(flag==0){//没有通配符匹配执行过
+				flag=1;
+				execOuterCmd(cmd);
+			}
+		}
+		else
+			execOuterCmd(cmd);
     }
     
     //释放结构体空间
@@ -645,7 +762,78 @@ void execSimpleCmd(SimpleCmd *cmd){
 	if(cmd->output!=NULL)
     	free(cmd->output);
 }
+/*******************************************************
+                     通配符处理函数
+********************************************************/
+char dp_match( const char *str1, const char *str2)//第一个为文件名，第二个为通配符
+{
+    int slen1 = strlen(str1);
+    int slen2 = strlen(str2);
+    char match[MAXSIZE][MAXSIZE];
+    memset(match, 0, MAXSIZE*MAXSIZE);
+    match[0][0] = 1;
+    int i, j, k, m;
+    for(i=1; i<=slen1; ++i)
+    {
+        for(j=1; j<=slen2; ++j)
+            if(match[i-1][j-1])
+                if(str1[i-1]==str2[j-1] || str2[j-1]=='?')
+                    match[i][j]=1; 
+                else if(str2[j-1]=='*')
+                    for(k=i-1; k<=slen1; ++k)
+                        match[k][j] = 1;
+        for(k=1; k<=slen2; ++k)
+            if(match[i][k])
+                break;
+        if(k>slen2) return 0;
+    }
+    return match[slen1][slen2];
+}
 
+int contain_wildcard(char* str){
+	int i;
+	for(i=0;str[i]!='\0';++i){
+		if(str[i]=='*'||str[i]=='?')
+			return 1;
+	}
+	return 0;
+}
+
+char* find_dir(char* str){
+	int i=0;
+	char *cmddir=NULL;
+	//从后向前找到第一个'/'
+	for(i=strlen(str);i>=0;--i){
+		if(str[i]=='/'){
+			cmddir=(char*)malloc((i+2)*sizeof(char));
+			strncpy(cmddir,str,i+1);
+			return cmddir;
+		}
+	}
+	//若未找到，则返回本地目录
+	cmddir=(char*)malloc(3*sizeof(char));
+	cmddir[0]='.';
+	cmddir[1]='/';
+	cmddir[2]='\0';
+	return cmddir;
+}
+
+char* find_file(char* str){
+	int i=0;
+	char *cmdfile=NULL;
+	//从后向前找到第一个'/'
+	for(i=strlen(str);i>=0;--i){
+		if(str[i]=='/'){
+			cmdfile=(char*)malloc((strlen(str)-i)*sizeof(char));
+			strcpy(cmdfile,str+i+1);
+			return cmdfile;
+		}
+	}
+	//若未找到，则返回本地目录
+	cmdfile=(char*)malloc((strlen(str)+1)*sizeof(char));
+	strcpy(cmdfile,str);
+	return cmdfile;
+}
 /*******************************************************
                      命令执行接口
 ********************************************************/
