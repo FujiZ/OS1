@@ -530,7 +530,7 @@ SimpleCmd* handleSimpleCmdStr(int begin, int end){
 void execOuterCmd(SimpleCmd *cmd){
     pid_t pid;
     int pipeIn, pipeOut;
-    sigset_t new;
+    sigset_t sint,sstp;
     if(exists(cmd->args[0])){ //命令存在
 
         if((pid = fork()) < 0){
@@ -539,9 +539,12 @@ void execOuterCmd(SimpleCmd *cmd){
         }
         
         if(pid == 0){ //子进程
-			sigemptyset(&new);
-			sigaddset(&new, SIGINT);
-			sigprocmask(SIG_BLOCK, &new, NULL);
+			sigemptyset(&sint);
+			sigaddset(&sint, SIGINT);
+			sigprocmask(SIG_BLOCK, &sint, NULL);
+			sigemptyset(&sstp);
+			sigaddset(&sstp, SIGSTP);
+			sigprocmask(SIG_BLOCK, &sstp, NULL);
 		//在这里添加pipe(需要判断是否为0或1)
 			if(inPipe!=0){
 				dup2(inPipe,0);
