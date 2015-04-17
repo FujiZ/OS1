@@ -867,11 +867,10 @@ int replace_cmd(SimpleCmd *cmd,int i,glob_t *gl){
 		strcpy(argbuffer[i+j],gl->gl_pathv[j]);
 	}
 	//将剩余参数复制到argbuffer
-	for(j=i+1;cmd->args[j]!=NULL;++j){
+	for(j=i+1;j<length;++j){
 		argbuffer[j+gl->gl_pathc-1]=cmd->args[j];
 		cmd->args[j]=NULL;
 	}
-	argbuffer[j+gl->gl_pathc-1]=NULL;
 	free(cmd->args);
 	cmd->args=argbuffer;
 	return i+gl->gl_pathc-1;

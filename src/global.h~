@@ -48,7 +48,7 @@ extern "C" {
 	int contain_wildcard(char* str);
 	char* find_dir(char* str);
 	char* find_file(char* str);
-	int replace_cmd(SimpleCmd *cmd,int i,glob_t *gl);
+	int replace_cmd(SimpleCmd &cmd,int i,glob_t &gl);
 #ifdef	__cplusplus
 }
 #endif
