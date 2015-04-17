@@ -152,7 +152,7 @@ void rmJob(int sig, siginfo_t *sip, void* noused){
     }else{
         last->next = now->next;
     }
-    
+    wait(NULL);//等待后台进程结束
     free(now);
 }
 
@@ -187,38 +187,6 @@ void ctrl_Z(){
 }
 
 /*组合键命令ctrl+c*/
-void ctrl_C(){
-   Job *now = NULL, *last = NULL;
-   if(fgPid == 0){ //前台没有作业则直接返回
-        return;
-    }
-        //
-    ingnore = 0;
-    
-	now = head;
-	while(now != NULL && now->pid != fgPid)
-		now = now->next;
-    
-    if(now == NULL){ //未找到前台作业，则根据fgPid添加前台作业
-        now = addJob(fgPid);
-    }
-    
-		    //修改前台作业的状态及相应的命令格式，并打印提示信息
-    strcpy(now->state, KILLED); 
-    now->cmd[strlen(now->cmd)] = '\0';
-    printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
-    
-	            //发送SIGTERM信号给正在前台运作的工作，将其终止
-    kill(fgPid, SIGTERM);
-				//将终止的进程的jobs信息删除.
-    if(now == head){
-        head = now->next;
-    }else{
-        last->next = now->next;
-    }
-    free(now);
-    fgPid = 0;
-}
 /*
 void ctrl_C(){
     Job *now = NULL,*pre = NULL;
@@ -252,13 +220,10 @@ void ctrl_C(){
     fgPid = 0;
 }
 */
-/*
+
 void ctrl_C(){
     Job *now = NULL;
-    
-	//SIGCHLD信号产生自此函数
-    ingnore = 1;
-
+   
     if(fgPid == 0){ //前台没有作业则直接返回
         return;
     }
@@ -272,15 +237,13 @@ void ctrl_C(){
     
 	//修改前台作业的状态及相应的命令格式，并打印提示信息
     strcpy(now->state, KILLED); 
-    now->cmd[strlen(now->cmd)] = '&';
-    now->cmd[strlen(now->cmd) + 1] = '\0';
     printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
     
-	//发送SIGINT信号给正在前台运作的工作，将其杀死
+	//发送SIGKILL信号给正在前台运作的工作，将其杀死
     kill(fgPid, SIGKILL);
     fgPid = 0;
 }
-*/
+
 /*fg命令*/
 void fg_exec(int pid){    
     Job *now = NULL; 
@@ -312,6 +275,7 @@ void fg_exec(int pid){
     
     printf("%s\n", now->cmd);
     kill(now->pid, SIGCONT); //向对象作业发送SIGCONT信号，使其运行
+	sleep(1);
     waitpid(fgPid, NULL, 0); //父进程等待前台进程的运行
 }
 
@@ -333,7 +297,6 @@ void bg_exec(int pid){
     }
     
     strcpy(now->state, RUNNING); //修改对象作业的状态
-	//signal(SIGINT, ctrl_C); //设置signal信号，为下一次按下组合键Ctrl+c做准备
     printf("[%d]\t%s\t\t%s\n", now->pid, now->state, now->cmd);
     
     kill(now->pid, SIGCONT); //向对象作业发送SIGCONT信号，使其运行
@@ -567,7 +530,7 @@ SimpleCmd* handleSimpleCmdStr(int begin, int end){
 void execOuterCmd(SimpleCmd *cmd){
     pid_t pid;
     int pipeIn, pipeOut;
-    
+    sigset_t new,old;
     if(exists(cmd->args[0])){ //命令存在
 
         if((pid = fork()) < 0){
@@ -576,6 +539,9 @@ void execOuterCmd(SimpleCmd *cmd){
         }
         
         if(pid == 0){ //子进程
+			sigemptyset(&new);
+			sigaddset(&new, SIGINT);
+			sigprocmask(SIG_BLOCK, &new, NULL);
 		//在这里添加pipe(需要判断是否为0或1)
 			if(inPipe!=0){
 				dup2(inPipe,0);
@@ -867,10 +833,11 @@ int replace_cmd(SimpleCmd *cmd,int i,glob_t *gl){
 		strcpy(argbuffer[i+j],gl->gl_pathv[j]);
 	}
 	//将剩余参数复制到argbuffer
-	for(j=i+1;j<length;++j){
+	for(j=i+1;cmd->args[j]!=NULL;++j){
 		argbuffer[j+gl->gl_pathc-1]=cmd->args[j];
 		cmd->args[j]=NULL;
 	}
+	argbuffer[j+gl->gl_pathc-1]=NULL;
 	free(cmd->args);
 	cmd->args=argbuffer;
 	return i+gl->gl_pathc-1;
