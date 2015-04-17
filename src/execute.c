@@ -13,6 +13,7 @@
 #include <sys/termios.h>
 #include <dirent.h>
 
+
 #include "global.h"
 #define DEBUG
 int goon = 0, ingnore = 0;       //用于设置signal信号量
@@ -625,11 +626,11 @@ void execOuterCmd(SimpleCmd *cmd){
             if(cmd ->isBack){ //后台命令             
                 fgPid = 0; //pid置0，为下一命令做准备
                 addJob(pid); //增加新的作业
+				sleep(1);//test
                 kill(pid, SIGUSR1); //子进程发信号，表示作业已加入
             	
                 //等待子进程输出
                 signal(SIGUSR1, setGoon);
-				sleep(1);//test
                 while(goon == 0) ;
                 goon = 0;
             }else{ //非后台命令
@@ -652,6 +653,7 @@ void execSimpleCmd(SimpleCmd *cmd){
 	DIR *dir_source=NULL;
 	struct dirent * dir_ptr;
     Job *now = NULL;
+	glob_t gl;
     
     if(strcmp(cmd->args[0], "exit") == 0) { //exit命令
         exit(0);
@@ -706,6 +708,15 @@ void execSimpleCmd(SimpleCmd *cmd){
     } else{ //外部命令
 		//此处插入对通配符的支持，通过扫描目标目录下的文件名来判断是否符合要求
 		if(strcmp(cmd->args[0],"echo")!=0){//排除诸如echo等不用通配符的命令(可以按需求添加)
+			//尝试使用glob()实现通配符
+			for(i=1;cmd->args[i]!=NULL;++i){
+				if(args[0]!='-'){//该字符串不是参数
+					gl.gl_offs = 0;
+					if(glob(cmd->args[i], GLOB_TILDE, 0, &gl)==0){//匹配成功
+						i=replace_cmd(cmd,i,&gl);
+					}
+			}
+			/*通配符的另一种实现
 			//先判断参数1到n中有没有通配符
 			for(i=1;cmd->args[i]!=NULL;++i){
 				if(contain_wildcard(cmd->args[i])){//如果扫描到有通配符的
@@ -748,9 +759,9 @@ void execSimpleCmd(SimpleCmd *cmd){
 				flag=1;
 				execOuterCmd(cmd);
 			}
+			*/
 		}
-		else
-			execOuterCmd(cmd);
+		execOuterCmd(cmd);
     }
     
     //释放结构体空间
@@ -833,6 +844,33 @@ char* find_file(char* str){
 	cmdfile=(char*)malloc((strlen(str)+1)*sizeof(char));
 	strcpy(cmdfile,str);
 	return cmdfile;
+}
+
+int replace_cmd(SimpleCmd &cmd,int i,glob_t &gl){
+	int j,length;
+	char **argbuffer=NULL;
+	for(length=0;cmd->args[length]!=NULL;++length);//计算出cmd的参数数量
+	argbuffer=(char**)malloc((length+gl->gl_pathc)*sizeof(char*));
+	length+=length+gl->gl_pathc;
+	for(j=0;j<i;++j){//复制前i个参数
+		argbuffer[j]=cmd->args[j];
+		cmd->args[j]=NULL;
+	}
+	free(cmd->args[i]);//将第i个参数free掉
+	cmd->args[i]=NULL;
+	//扩充参数
+	for(j=0;j<gl->gl_pathc;++j){
+		argbuffer[i+j]=(char*)malloc((strlen(gl->gl_pathv[j])+1)*sizeof(char));
+		strcpy(argbuffer[i+j],gl->gl_pathv[j]);
+	}
+	//将剩余参数复制到argbuffer
+	for(j=i+1;j<length;++j){
+		argbuffer[j+gl->gl_pathc-1]=cmd->args[j];
+		cmd->args[j]=NULL;
+	}
+	free(cmd->args);
+	cmd->args=argbuffer;
+	return i+gl->gl_pathc-1;
 }
 /*******************************************************
                      命令执行接口
